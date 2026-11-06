@@ -2,7 +2,9 @@
 
 This record highlights risks identified from actual fixes. It does not imply that the same defects remain in the current code. Consult relevant lessons before a change and verify the current implementation and tests; the [validation guide](validation.md) defines commands and evidence requirements.
 
-New lessons should identify the trigger, failure, suggested check, and a verifiable issue, PR, or commit. Add evidence when a problem recurs. Move requirements proven durable in practice into the validation guide, and revise or remove outdated lessons. Do not count distinct defects as repetitions of the same problem.
+When implementing or reviewing a change, trace the affected behavior from its entry point to persisted state and side effects, and inspect related entry points for the same defect when relevant. Apply the checks that fit the change and record verification and remaining gaps as described in the validation guide.
+
+When work exposes a consequential risk or a recurring problem, add a lesson or update an existing one with the trigger, failure, suggested check, and a verifiable issue, PR, or commit. Add evidence when a problem recurs. Move requirements proven durable in practice into the validation guide, and revise or remove outdated lessons. Do not count distinct defects as repetitions of the same problem, or add a lesson for every routine fix.
 
 ## Model capabilities and requests can diverge
 

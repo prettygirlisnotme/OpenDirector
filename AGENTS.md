@@ -139,6 +139,7 @@ Agent 根据创作目标选择能力、安排任务依赖，在允许时批量�
 
 ## 实施与验证约束
 
+- Before changing or reviewing code, read the [development lessons](docs/development/lessons.md), verify the current implementation and tests, and apply checks relevant to the change. When fixing a defect, trace the affected business path and check related entry points; record verifiable new risks or recurring problems as described in the lessons.
 - 以模块化单体、清晰服务边界和可恢复后台任务起步；没有实际需求时不扩展为微服务、独立消息队列或通用工作流平台。
 - 保留 OpenDirector 的界面、模型协议、适配与调度能力及高级编辑体验。采用外部设计时，直接描述业务语义并按上述对象边界适配，不依赖其他仓库或复制耦合实现。
 - 优先修复共用服务、契约或公共组件中的问题，再补充类型专属逻辑；避免只为某个入口增加绕过规则的特例。
