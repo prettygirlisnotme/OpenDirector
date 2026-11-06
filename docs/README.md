@@ -10,6 +10,7 @@ This directory is the entry point for the repository's shared documentation. The
 | [Unified project architecture](architecture/unified-project.md) | Business objects, shared entry points, and interaction rules | Object responsibilities, commands, persistence, or interaction rules change |
 | [Roadmap](development/roadmap.md) | Capability dependencies and delivery criteria | Scope, dependencies, or acceptance criteria change |
 | [Validation guide](development/validation.md) | Reproducible checks and evidence requirements | Tools, runtime requirements, or validation entry points change |
+| [Development lessons](development/lessons.md) | Risks identified from recent fixes | New evidence emerges or a lesson no longer applies |
 | [macOS installation validation](development/macos-install-validation.md) | Installation and usage scenarios verified on Apple Silicon | The corresponding acceptance checks are repeated |
 | [Bilingual interface](development/i18n.md) | Language selection, message organization, and checks | Language policy, message structure, or checks change |
 | [Python installation and packaging](development/packaging.md) | Installation, platform wheel builds, and isolated verification | Packaging, resource paths, or build process changes |
