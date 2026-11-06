@@ -1,164 +1,164 @@
-# OpenDirector 开发指导
+# OpenDirector development guidance
 
-## 文档职责
+## Purpose of this document
 
-本文适用于整个仓库，规定长期有效的产品方向、架构原则和发展路径，供开发者及代码 Agent 共同遵循。
+This document applies to the entire repository. It defines the enduring product direction, architectural principles, and development path for developers and coding agents.
 
-本文描述目标和决策依据，不代表其中所有能力已经实现。不要在此记录完成状态、当前缺陷、临时兼容分支、commit 编号或测试通过数量。具体需求、实施任务、差异分析和验证证据分别保存在对应文档中；判断实现情况必须核对代码与测试。
+It describes goals and the reasoning behind decisions, not a claim that every capability has already been implemented. Do not record completion status, current defects, temporary compatibility branches, commit IDs, or test counts here. Record requirements, implementation tasks, gap analyses, and validation evidence in their respective documents; check code and tests to determine what is implemented.
 
-## 产品方向
+## Product direction
 
-OpenDirector 面向用户与 Agent 协同完成视频创作。**用户与 Agent 在相同业务条件和授权范围内具有等价的创作能力**，覆盖素材管理、内容生成、媒体编辑、候选采用、时间线编排和视频导出。两者共同操作同一个工程，产生的内容都能由另一方继续编辑。
+OpenDirector enables users and agents to create videos together. **Users and agents have equivalent creative capabilities under the same business conditions and authorization**, covering asset management, content generation, media editing, candidate adoption, timeline arrangement, and video export. Both work on the same project, and each can continue editing content created by the other.
 
-Agent 是提高视频创作效率的核心入口。用户可以直接表达创作目标，由 Agent 通过 Agent Loop 拆解任务、选择能力、安排依赖、执行操作、观察实际结果并调整后续步骤，减少逐项操作、重复输入和人工等待。效率提升应在创作要求、质量和资源约束下评估，不以少做必要工作或降低交付范围代替。
+The agent is a core entry point for improving video creation efficiency. Users can express a creative goal directly; the agent uses an agent loop to break down work, select capabilities, arrange dependencies, execute operations, observe actual results, and adjust subsequent steps. This reduces individual operations, repeated input, and human waiting. Evaluate efficiency against creative requirements, quality, and resource constraints; do not substitute skipping necessary work or reducing delivery scope for an improvement.
 
-画布、时间线和编辑面板承担用户交互、内容查看与直接修改的职责。业务能力独立于这些界面存在，用户通过 UI 调用，Agent 通过 tool use 或 function calling 调用；画布的展示结构不限定 Agent 的能力或操作步骤。保留一致的视觉设计、流畅的交互、完整的模型接入与高级编辑能力。
+The canvas, timeline, and editing panels support user interaction, content inspection, and direct modification. Business capabilities exist independently of these interfaces: users call them through the UI, and agents through tool use or function calling. The canvas presentation does not limit agent capabilities or steps. Preserve a consistent visual design, smooth interaction, complete model integrations, and advanced editing capabilities.
 
-右侧 AI 助手聊天框是用户与 Agent 的对话协作入口。用户通过自然语言提出目标、引用素材、委托任务、反馈结果和调整要求；Agent 结合工程上下文调用业务能力，反馈进度、结果及需要用户决定的事项。执行产生的真实内容同步到工程和画布，用户可以直接修改后继续通过对话委托，形成“对话委托—执行反馈—直接编辑—继续协作”的闭环。
+The right-hand AI assistant chat is the entry point for conversational collaboration. Users express goals, reference assets, delegate tasks, give feedback, and adjust requirements in natural language. The agent uses project context to call business capabilities and reports progress, results, and decisions needed from the user. Actual content produced by execution is synchronized to the project and canvas, where users can edit it directly and continue delegating through chat. This forms a loop of conversational delegation, execution feedback, direct editing, and continued collaboration.
 
-能力等价以可执行的业务操作、规则和可继续编辑的结果为依据，不要求工具逐个对应按钮或模拟鼠标手势。用户可以手动操作、委托 Agent 或交错协作；授权、锁定和验收要求持续生效，Agent 不因具备能力而自动获得超出授权的决定权。
+Capability equivalence is based on executable business operations, rules, and results that remain editable. It does not require a tool for each button or simulated mouse gestures. Users may operate directly, delegate to an agent, or alternate between them. Authorization, locks, and acceptance requirements remain in effect; an agent does not gain decision authority beyond its authorization merely because it has a capability.
 
-**统一项目模式的核心是：同一业务能力，共享命令、校验、工程状态、执行依据和回执。** 接口数量、传输协议或界面形式不能单独证明已经实现统一。
+**The unified project model means that the same business capability shares commands, validation, project state, execution evidence, and receipts.** The number of interfaces, transport protocols, or presentation alone cannot demonstrate unification.
 
-画布连线表达生成参考，时间线表达视频编排。参考关系不自动执行上下游任务，也不等于把视频按连线顺序拼接；任务顺序由用户或 Agent 明确安排。
+Canvas connections express generation references; the timeline expresses video arrangement. A reference relationship does not automatically execute upstream or downstream tasks and does not mean videos are concatenated in connection order. The user or agent explicitly arranges task order.
 
-产品默认同时服务中文与英文用户。界面文案、后端错误与状态回执、工具与模型等目录的显示名、导出与下载提示都提供两种语言；语言属于显示层选择，不改变业务值、对象身份或工程数据。
+The product serves Chinese and English users by default. UI text, backend errors and status receipts, display names in tool and model catalogs, and export and download prompts are available in both languages. Language is a presentation choice and does not change business values, object identity, or project data.
 
-## 核心设计原则
+## Core design principles
 
-### 1. 用户与 Agent 能力等价，共用业务服务
+### 1. Users and agents have equivalent capabilities and share business services
 
-- 每项创作能力从契约设计开始同时考虑 UI 和 Agent 入口。纳入交付范围的业务操作应能由两种入口完成，不将 Agent 长期限制为只支持生成或少数便捷工具。
-- 用户直接操作与右侧 AI 助手对话共享工程上下文。聊天中的创作要求由 Agent 通过业务服务执行，对话回复中的承诺必须与实际操作回执和结果一致。
-- 核心业务规则放在领域与应用服务中。HTTP、UI 适配和 Agent 工具负责参数转换、调用与结果呈现。
-- 内置 Agent 可以直接调用应用服务，外部调用者可以通过 HTTP 或工具协议接入；不同入口执行相同业务规则。
-- 工具围绕创建配置、添加参考、提交生成、采用结果、编辑时间线等创作意图设计，不要求每个按钮对应一个工具。
-- Agent 可以通过批量和组合能力高效完成多步创作，用户仍能检查并继续编辑其中的对象和结果。业务语义一致不要求操作步骤、创作策略或开放式生成结果完全相同。
-- 组合操作继续调用基础能力，并遵守版本、锁定、资源和事务约束。不同操作粒度不能成为绕过校验的路径。
-- Agent 的正式操作通过业务对象及稳定身份完成，不依赖模拟鼠标、React Flow 运行实例或特定面板保持打开。
+- Consider both UI and agent entry points from contract design onward for every creative capability. Business operations in scope must be available through both; do not permanently restrict agents to generation or a few convenience tools.
+- Direct user operations and conversations with the right-hand AI assistant share project context. The agent executes chat requests through business services; promises in replies must agree with actual receipts and results.
+- Place core business rules in domain and application services. HTTP, UI adapters, and agent tools translate parameters, invoke services, and present results.
+- Built-in agents may call application services directly; external callers may use HTTP or tool protocols. Entry points apply the same business rules.
+- Design tools around creative intent, such as creating configurations, adding references, submitting generation, adopting results, and editing the timeline. Do not require one tool per button.
+- Agents may use batch and composite capabilities to complete multi-step work efficiently, while users can still inspect and continue editing the objects and results. Consistent business semantics do not require identical steps, creative strategies, or open-ended generation results.
+- Composite operations continue to use base capabilities and obey version, lock, resource, and transaction constraints. Different operation granularity must not bypass validation.
+- Formal agent operations use business objects and stable identities, not simulated mouse input, a React Flow runtime instance, or a particular panel remaining open.
 
-### 2. 工程是业务事实的权威来源
+### 2. The project is the authoritative source of business facts
 
-- 后端项目存储拥有持久化业务事实。浏览器保存可重建缓存、界面偏好及明确的临时草稿，不维护另一份可独立修改的完整工程。
-- React Flow 节点和边是工程对象的展示投影。允许乐观交互和局部草稿，但正式结果必须依据服务端回执确认。
-- 业务对象能够脱离可见画布存在。隐藏展示对象不删除逻辑来源、素材、参考或历史；重新显示应保留其身份和关联。
-- 来源项目的只读查询不申请编辑会话，不切换当前项目；跨项目复用将所需素材登记到目标项目，不依赖来源页面或临时 URL。
-- 沿用项目目录、文件锁、原子写入和可恢复提交的存储机制；运行协调和模型凭证与工程内容分离。
+- Backend project storage owns persisted business facts. The browser stores reconstructible caches, UI preferences, and explicit temporary drafts, not a second independently editable complete project.
+- React Flow nodes and edges are presentation projections of project objects. Optimistic interaction and local drafts are allowed, but formal results must be confirmed by server receipts.
+- Business objects can exist without a visible canvas representation. Hiding an item does not delete its logical source, assets, references, or history; showing it again preserves its identity and relationships.
+- Read-only queries of a source project do not request an editing session or switch the current project. Cross-project reuse registers required assets in the target project and does not depend on the source page or a temporary URL.
+- Retain the project directory, file locks, atomic writes, and recoverable commit storage mechanisms. Keep runtime coordination and model credentials separate from project content.
 
-### 3. 分离生成意图、执行事实和当前采用
+### 3. Separate generation intent, execution facts, and current adoption
 
-- 生成配置与参考表达下一次创作意图。
-- 已接受任务固定本次实际素材、模型、参数及输入快照，后续编辑不改写这些依据。
-- 结果、候选和当前采用分别记录。成功生成不自动取得覆盖当前内容的权限；自动采用必须遵守明确策略和当前版本校验。
-- 应用历史版本通过明确的业务操作恢复对应范围，保持旧执行记录不变；独立的参数恢复、结果切换和完整版本应用具有各自语义。
-- 文件生成、技术检查和创作质量验收分别表达，不把工具成功当作用户已经审看或批准。
+- Generation configuration and references express intent for the next creation.
+- An accepted job fixes its actual assets, model, parameters, and input snapshot. Later edits do not rewrite this evidence.
+- Record results, candidates, and current adoption separately. Successful generation does not automatically grant permission to overwrite current content; automatic adoption must obey an explicit policy and current-version validation.
+- Applying a historical version restores the appropriate scope through an explicit business operation while preserving old execution records. Parameter restoration, result switching, and full version application each have distinct semantics.
+- Express file generation, technical checks, and creative quality acceptance separately. Tool success does not mean the user has reviewed or approved the result.
 
-### 4. 能力与规则保持一致
+### 4. Keep capabilities and rules consistent
 
-- 节点媒体类型、业务角色和操作能力分别建模。上传到已有节点时按操作意图校验，不能隐式转换节点类型。
-- 来源身份、参考关系身份、素材身份及内容指纹各司其职；同名或相同内容不能证明两个逻辑来源相同。
-- 参考支持跟随来源当前版本及固定素材版本，执行前解析为确定输入。正文引用和画布连线共同投影真实参考关系。
-- 所有入口共用文件探测、素材准备和校验基础，并按本体替换、生成参考、主体槽位、时间线等业务意图区分规则。
-- 模型、模式、类型、数量、实际字节、聚合预算、锁定、对象版本及文件可用性由后端最终校验。UI 预检用于即时反馈。
-- UI 可用操作和拒绝原因应从共用能力契约派生，避免各节点、面板及 Agent 分别维护业务规则。
+- Model node media type, business role, and operation capability separately. Validate uploads to an existing node according to the operation's intent; do not implicitly change the node type.
+- Source identity, reference relationship identity, asset identity, and content fingerprint serve different purposes. Matching names or content do not prove that two logical sources are identical.
+- References support following a source's current version or pinning an asset version and resolve to deterministic inputs before execution. Text references and canvas connections jointly project actual reference relationships.
+- All entry points share file probing, asset preparation, and validation foundations, with rules distinguished by business intent such as replacing content, generation references, subject slots, and timeline use.
+- The backend performs final validation of model, mode, type, count, actual bytes, aggregate budget, locks, object versions, and file availability. UI prechecks provide immediate feedback.
+- Derive available UI operations and rejection reasons from shared capability contracts rather than maintaining separate business rules in each node, panel, and agent.
 
-### 5. 异步操作可追踪、可恢复
+### 5. Asynchronous operations are traceable and recoverable
 
-- 修改使用稳定操作身份及必要的对象版本。同 ID 同输入重放返回原回执，同 ID 不同输入拒绝执行。
-- 对象、素材、回执和变更记录按明确提交边界协调恢复；不能把局部写入描述为完整成功。
-- 查询、预览、修改和长任务分别建模。查询不产生创作或会话切换副作用；长任务返回可查询的接受记录。
-- 取消请求、远端取消确认、任务中断、未知提交、恢复原任务和新建尝试保持不同语义。未知提交不能通过换 ID 自动重发。
-- 撤销只修改允许回退的工程内容，不能撤销远端调用、费用或既有执行事实。
-- 工具任务可以保留独立类型和执行台账，但必须参与统一的素材依赖、删除保护、来源查询和变更通知。
-- 已登记但未发布到目标的素材或结果保留可解释状态，失败重试不得静默重复创建。
+- Mutations use stable operation identities and object versions where needed. Replaying the same ID with the same input returns the original receipt; the same ID with different input is rejected.
+- Coordinate recovery of objects, assets, receipts, and change records across explicit commit boundaries. Do not describe partial writes as complete success.
+- Model queries, previews, mutations, and long-running jobs separately. Queries do not cause creation or session-switching side effects; long-running jobs return a queryable acceptance record.
+- Keep cancellation request, remote cancellation confirmation, job interruption, unknown submission, resuming the original job, and starting a new attempt distinct. Do not automatically resubmit an unknown submission with a new ID.
+- Undo changes only project content that can be rolled back; it cannot undo remote calls, charges, or existing execution facts.
+- Tool tasks may retain separate types and execution ledgers, but must participate in shared asset dependencies, deletion protection, provenance queries, and change notifications.
+- Assets or results registered but not published to a target retain an explainable state. Retrying after failure must not silently create duplicates.
 
-### 6. 同步与交互相互配合
+### 6. Synchronization and interaction work together
 
-- UI、Agent 与后台完成的正式变更进入同一可恢复通知通道。事件提示变化，项目查询提供权威状态。
-- 按受影响对象更新界面，处理重复、乱序和断线；无法补取时重新获取快照。
-- 后台更新保留用户的选择、焦点、播放头和未提交输入。冲突通过重新读取、比较与明确处理解决，不能自动换版本覆盖。
-- 拖动和缩放使用客户端临时状态，完成交互后提交布局；避免逐指针写盘、重复扫描大媒体或在渲染中执行完整历史读取。
-- 业务保存与界面状态保存分别确认。视口或偏好保存失败不能改变已提交业务的事实。
+- Formal changes completed by the UI, agent, and background work enter the same recoverable notification channel. Events signal changes; project queries provide authoritative state.
+- Update the interface by affected object and handle duplicate, out-of-order, and disconnected events. Fetch a fresh snapshot when changes cannot be recovered.
+- Background updates preserve the user's selection, focus, playhead, and uncommitted input. Resolve conflicts by rereading, comparing, and handling them explicitly; do not automatically replace versions and overwrite content.
+- Dragging and zooming use temporary client state and submit layout after the interaction. Avoid writing to disk on every pointer event, repeatedly scanning large media, or reading full history during rendering.
+- Confirm business saves and UI state saves separately. A failed viewport or preference save must not change the fact that a business operation was committed.
 
-### 7. 用户可见内容默认中英双语
+### 7. User-visible content is bilingual by default
 
-- 新功能在契约和交互设计阶段就纳入中英两种语言，交付时同时提供 `zh-CN` 与 `en-US` 词条，不把翻译留作后续补丁。
-- 界面文案、后端错误与状态回执、工具与模型等目录的显示名、导出与下载提示都通过词条或显示层查找表表达，不在组件、服务端回执或静态数据中硬编码任一语言。
-- `auto`、工具 id、节点类型、音色 id 等稳定业务值保持原值，只在显示层翻译；新增目录项、后端状态或错误码时同步补充两种语言。
-- Agent 回复语言跟随用户提问语言，不跟随界面语言，也不因界面语言改变工具行为。
-- 验收覆盖中英文切换：两种语言键集合一致、无对方语言泄漏、后端错误可读；用户可见文档随功能同步中英文版本。
+- Include Chinese and English when designing contracts and interactions for new features. Deliver both `zh-CN` and `en-US` entries together; do not defer translation to a later patch.
+- Express UI copy, backend errors and status receipts, display names in tool and model catalogs, and export and download prompts through message catalogs or presentation-layer lookup tables. Do not hardcode either language in components, server receipts, or static data.
+- Keep stable business values such as `auto`, tool IDs, node types, and voice IDs unchanged; translate only in the presentation layer. Add both languages when introducing catalog items, backend states, or error codes.
+- Agent reply language follows the user's question, not the interface language; changing the interface language does not change tool behavior.
+- Acceptance covers switching between Chinese and English: both languages have matching key sets, neither leaks the other language, and backend errors are readable. Deliver user-facing documentation in both languages with the feature.
 
-## 对象职责
+## Object responsibilities
 
-| 对象 | 主要职责 |
+| Object | Primary responsibility |
 | --- | --- |
-| Project | 稳定工程身份、对象范围和存储生命周期 |
-| Asset | 素材内容、不可变内容身份、指纹、媒体事实和实际来源 |
-| GenerationSpec | 可编辑的提示词、模型、参数和生成意图 |
-| Reference | 来源、生成目标、用途、顺序和版本策略 |
-| CanvasItem | 展示对象、位置、尺寸、层级、分组和锁定 |
-| 编辑文档 | 主体、图层、媒体编辑及时间线等可继续编辑的结构 |
-| Job / 工具任务 | 一次执行的固定输入、状态、远端身份和结果依据 |
-| 结果版本与采用关系 | 候选归属、历史以及当前明确采用的结果 |
-| 会话与 Agent 运行记录 | 右侧 AI 助手对话、引用快照、操作关联和执行上下文 |
-| ViewState | 选择、视口、活动编辑器、播放头等客户端状态 |
+| Project | Stable project identity, object scope, and storage lifecycle |
+| Asset | Asset content, immutable content identity, fingerprint, media facts, and actual provenance |
+| GenerationSpec | Editable prompts, model, parameters, and generation intent |
+| Reference | Source, generation target, purpose, order, and version policy |
+| CanvasItem | Presentation object, position, size, layering, grouping, and locking |
+| Editing document | Editable structures such as subjects, layers, media edits, and the timeline |
+| Job / tool task | Fixed inputs, status, remote identity, and result evidence for one execution |
+| Result versions and adoption relationships | Candidate ownership, history, and the currently explicitly adopted result |
+| Sessions and agent run records | Right-hand AI assistant conversations, reference snapshots, operation links, and execution context |
+| ViewState | Client state such as selection, viewport, active editor, and playhead |
 
-对象名称可以随实现调整，职责边界不能因方便界面存取而合并。节点的公共交互通过共享组件、类型化契约及能力组合实现，各类型只扩展专属内容和行为。
+Object names may change with implementation, but responsibility boundaries must not be merged for UI convenience. Shared node interactions use shared components, typed contracts, and capability composition; each type extends only its specific content and behavior.
 
-## 发展路径
+## Development path
 
-以下为按依赖推进的长期路径，不是当前进度表。按能力逐项建设共用服务、UI 和 Agent 入口，逐项验证能力等价与创作效率；不以“先完成所有画布功能，再开放部分工具”作为长期产品分层。
+The following is a long-term dependency-ordered path, not a current progress report. Build shared services, UI, and agent entry points capability by capability, verifying equivalence and creative efficiency for each. Do not adopt a long-term product split in which all canvas features are completed before only some tools are exposed.
 
-### 路径一：建立独立于交互方式的创作能力
+### Path 1: Establish creative capabilities independent of interaction method
 
-围绕素材管理、引用、生成、编辑、采用、时间线编排、导出和工程重开，建立类型化业务对象、命令、查询与执行服务。同步明确稳定身份、版本、回执、来源、历史和恢复边界，能力可在不操作画布界面的情况下调用。
+Build typed business objects, commands, queries, and execution services for asset management, references, generation, editing, adoption, timeline arrangement, export, and reopening projects. Define stable identity, versioning, receipts, provenance, history, and recovery boundaries. Capabilities must be callable without operating the canvas interface.
 
-验收重点是业务闭环实际可用、保存完整、失败可恢复，以及模型、媒体和高级编辑能力得到保留。
+Acceptance focuses on a usable business workflow, complete persistence, recoverable failures, and preservation of model, media, and advanced editing capabilities.
 
-### 路径二：建设等价的用户与 Agent 入口
+### Path 2: Build equivalent user and agent entry points
 
-将共用能力分别接入画布、时间线和编辑面板，以及 Agent 工具；通过右侧 AI 助手聊天框连接用户目标与 Agent 执行。参数 Schema、能力说明、校验与错误语义复用或派生；UI 支持精确直接操作，工具支持按创作意图调用及组合操作。
+Connect shared capabilities to the canvas, timeline, and editing panels as well as agent tools; connect user goals to agent execution through the right-hand AI assistant chat. Reuse or derive parameter schemas, capability descriptions, validation, and error semantics. The UI supports precise direct operations, while tools support operations and composition based on creative intent.
 
-验收重点是纳入交付范围的业务操作有等价入口，相同意图、输入与约束产生一致业务语义，不存在只能靠点击界面完成的必要创作步骤。
+Acceptance focuses on equivalent entry points for business operations in scope and consistent business semantics for the same intent, input, and constraints, with no necessary creation step available only by clicking the UI.
 
-### 路径三：形成可随时接续的协作闭环
+### Path 3: Form a collaboration loop that can resume at any time
 
-用户与 Agent 查询和修改相同对象。Agent 产生的素材、配置、参考、候选和时间线均为真实工程内容，用户可以检查、修改并继续委托；Agent 在继续执行前读取相关的新状态，尊重用户修改与锁定。
+Users and agents query and modify the same objects. Assets, configurations, references, candidates, and timelines produced by agents are actual project content that users can inspect, modify, and use for further delegation. Before continuing, the agent reads relevant new state and respects user changes and locks.
 
-接入右侧 AI 助手的会话、草稿、消息引用快照和 Agent 运行记录。用户可在对话中提出目标、反馈结果、调整要求并继续执行；收起聊天框保留会话和已接受任务，停止回复、停止后续编排和取消已提交任务分别表达。按照用户已有授权连续执行，只有超出授权范围或需要创作取舍时才请求决定，不为每次工具调用机械增加确认。
+Integrate right-hand AI assistant sessions, drafts, message reference snapshots, and agent run records. Users can express goals, give feedback, adjust requirements, and continue execution in chat. Collapsing the chat retains sessions and accepted jobs; stopping a reply, stopping subsequent orchestration, and canceling submitted jobs have distinct semantics. Continue within existing user authorization; request a decision only when exceeding that scope or when a creative choice is needed, not mechanically for every tool call.
 
-验收重点是直接操作与聊天委托可以交错接续，对话进度与真实工程一致，双方操作不会丢失内容、绕过锁定或错误采用结果，用户无需重新搭建 Agent 已经完成的工程。
+Acceptance focuses on direct operations and chat delegation being interchangeable and resumable, chat progress matching the actual project, and neither party losing content, bypassing locks, or adopting results incorrectly. Users should not need to rebuild work already completed by the agent.
 
-### 路径四：提高端到端视频创作效率
+### Path 4: Improve end-to-end video creation efficiency
 
-Agent 根据创作目标选择能力、安排任务依赖，在允许时批量或并行处理独立工作，观察实际结果并调整后续步骤。通过减少重复操作、等待期间的人工跟进和不必要的重做，提高从创作意图到可用视频的效率。组合编排复用基础操作，不另建脱离工程的素材图或执行状态。
+The agent selects capabilities and arranges task dependencies for the creative goal, processes independent work in batches or in parallel when permitted, observes actual results, and adjusts subsequent steps. Reduce repeated operations, human follow-up while waiting, and unnecessary rework to improve efficiency from creative intent to usable video. Composite orchestration reuses base operations rather than creating a separate asset graph or execution state outside the project.
 
-导出等必要业务步骤提供 Agent 可调用的执行入口，并明确其在客户端或后台运行的条件。若需求包含关闭浏览器后自主导出最终视频，必须提供可被后台调用的渲染能力；保留浏览器合成时，应准确表达需要客户端参与的范围。不能将工具可修改时间线等同于已经具备后台渲染。
+Provide agent-callable execution entry points for necessary business steps such as export, with clear conditions for client or background execution. If requirements include autonomously exporting the final video after the browser closes, provide a renderer callable in the background. If browser composition is retained, accurately state where client participation is required. The ability of tools to modify the timeline does not establish that background rendering exists.
 
-验收重点是输出真实满足创作要求、任务可恢复、结果和采用范围可解释，并在可比任务下衡量端到端耗时、人工介入次数、重复操作及资源消耗。工具调用成功或调用次数增加本身不能证明效率提高。
+Acceptance focuses on output that actually meets creative requirements, recoverable jobs, explainable results and adoption scope, and measurements of end-to-end time, human interventions, repeated operations, and resource consumption for comparable tasks. Tool-call success or a greater number of calls alone does not demonstrate improved efficiency.
 
-## 实施与验证约束
+## Implementation and validation constraints
 
 - Before changing or reviewing code, read the [development lessons](docs/development/lessons.md), verify the current implementation and tests, and apply checks relevant to the change. When fixing a defect, trace the affected business path and check related entry points; record verifiable new risks or recurring problems as described in the lessons.
-- 以模块化单体、清晰服务边界和可恢复后台任务起步；没有实际需求时不扩展为微服务、独立消息队列或通用工作流平台。
-- 保留 OpenDirector 的界面、模型协议、适配与调度能力及高级编辑体验。采用外部设计时，直接描述业务语义并按上述对象边界适配，不依赖其他仓库或复制耦合实现。
-- 优先修复共用服务、契约或公共组件中的问题，再补充类型专属逻辑；避免只为某个入口增加绕过规则的特例。
-- 新默认入口切换以完整创作闭环为门槛。过渡适配须有明确边界和退出条件，不能长期维护两份可修改的业务事实。
-- 不默认建设旧数据迁移或兼容层。不支持的格式明确拒绝，保留原工程和凭证，不自动删除或覆盖。
-- 验证覆盖实际输入、持久化对象、执行快照和输出，不能只检查界面出现节点、引用标签或连线。
-- 能力验收同时覆盖用户入口与 Agent 入口，包括编辑、采用、时间线及导出；效率验收使用真实端到端任务，避免仅凭工具数量或局部演示宣称目标达成。
-- 按改动风险选择测试：共用规则与类型边界、命令幂等与冲突、故障恢复、UI/Agent 等价操作，以及真实媒体编辑和导出的代表场景。
-- 区分模拟模型、真实文件验证和真实服务调用。性能结论需要可比较的测量，完成说明应准确报告验证范围与限制。
-- 制作台、完整剧作及全剧交付体系、额外模型能力或后台渲染引擎，均须由明确需求驱动，不因“统一项目”自动扩大范围。
-- 新增或修改用户可见内容时按 [中英双语界面](docs/development/i18n.md) 的新功能接入清单执行，并运行 `npm run check:i18n`；不能只依赖自动检查，需实际切换两种语言核对新增流程。
+- Start with a modular monolith, clear service boundaries, and recoverable background tasks. Do not introduce microservices, a separate message queue, or a general workflow platform without a real need.
+- Preserve OpenDirector's interface, model protocols, adapters, scheduling capabilities, and advanced editing experience. When adopting an external design, describe business semantics directly and adapt them to the object boundaries above; do not depend on another repository or copy a coupled implementation.
+- Fix shared services, contracts, or components first, then add type-specific logic as needed. Avoid entry-point-specific exceptions that bypass rules.
+- Switch a default entry point only when the complete creation workflow is ready. Transitional adapters need explicit boundaries and exit conditions; do not maintain two independently editable sources of business truth indefinitely.
+- Do not build legacy-data migration or compatibility layers by default. Reject unsupported formats explicitly, preserve original projects and credentials, and do not automatically delete or overwrite them.
+- Validation covers actual inputs, persisted objects, execution snapshots, and outputs; checking only that a node, reference label, or connection appears is insufficient.
+- Capability acceptance covers both user and agent entry points, including editing, adoption, timeline, and export. Efficiency acceptance uses real end-to-end tasks; do not claim the goal is met from tool counts or a partial demo alone.
+- Select tests according to change risk: shared rules and type boundaries, command idempotency and conflicts, failure recovery, equivalent UI and agent operations, and representative real media editing and export scenarios.
+- Distinguish mocked models, real file validation, and real service calls. Performance conclusions require comparable measurements; completion reports accurately state validation scope and limitations.
+- Production studios, complete scriptwriting and full-series delivery systems, additional model capabilities, and background rendering engines require explicit requirements; do not expand scope automatically because of the unified project model.
+- When adding or changing user-visible content, follow the new-feature checklist in [Bilingual interface](docs/development/i18n.md) and run `npm run check:i18n`. Automated checks alone are insufficient; switch between both languages and inspect the new flow.
 
-## 文档维护
+## Documentation maintenance
 
-架构原则及发展方向发生变化时更新本文，不在此维护实现进度。正式文档以 [文档入口与维护规范](docs/README.md) 为索引，并随代码通过 Git 一同交付。
+Update this document when architectural principles or development direction change; do not maintain implementation progress here. The [documentation index and maintenance rules](docs/README.md) index the formal documentation, which is delivered with the code through Git.
 
-- [统一项目架构](docs/architecture/unified-project.md) 描述对象、业务边界与执行语义。
-- [发展路线](docs/development/roadmap.md) 描述能力依赖、交付范围与验收门槛。
-- [验证指南](docs/development/validation.md) 描述可复现检查和证据要求。
-- [中英双语界面](docs/development/i18n.md) 描述语言选择、词条组织、审校入口和检查方式。
+- [Unified project architecture](docs/architecture/unified-project.md) describes objects, business boundaries, and execution semantics.
+- [Roadmap](docs/development/roadmap.md) describes capability dependencies, delivery scope, and acceptance thresholds.
+- [Validation guide](docs/development/validation.md) describes reproducible checks and evidence requirements.
+- [Bilingual interface](docs/development/i18n.md) describes language selection, message organization, review entry points, and checks.
 
-当前任务、缺陷和执行进度使用 Issue、PR 及必要的专题记录维护。文档索引只引用纳入 Git 的文件；开发机本地材料和相邻仓库不能成为其他开发者的必读依赖。相关设计与能力直接在本仓库解释，避免以其他产品名称代替具体语义。
+Maintain current tasks, defects, and execution progress in issues, PRs, and topic records where needed. The documentation index links only to files included in Git; local development materials and neighboring repositories must not become required reading for other developers. Explain relevant designs and capabilities directly in this repository rather than using another product's name in place of specific semantics.
