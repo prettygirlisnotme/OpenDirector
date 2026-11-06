@@ -1,23 +1,23 @@
-# 开发经验记录
+# Development lessons
 
-本记录从实际修复中提炼值得复查的风险，不代表当前代码仍有相同缺陷。变更前按相关范围参考，并核对当前实现和测试；验证命令与证据要求以[验证指南](validation.md)为准。
+This record highlights risks identified from actual fixes. It does not imply that the same defects remain in the current code. Consult relevant lessons before a change and verify the current implementation and tests; the [validation guide](validation.md) defines commands and evidence requirements.
 
-新增经验应写明触发条件、错误、建议检查和可核对的 Issue、PR 或提交。重复发生时补充证据；经实践证明稳定的要求纳入验证指南，过时的经验及时修订或移除。不要把不同缺陷简单计作同一问题反复发生。
+New lessons should identify the trigger, failure, suggested check, and a verifiable issue, PR, or commit. Add evidence when a problem recurs. Move requirements proven durable in practice into the validation guide, and revise or remove outdated lessons. Do not count distinct defects as repetitions of the same problem.
 
-## 模型能力与实际请求可能不一致
+## Model capabilities and requests can diverge
 
-- **触发条件：** 新建生成节点、配置模型能力或构造提供商请求。
-- **经验：** 默认输出、参考槽位和请求参数可能在不同层分别出错。提交 `f623fedd` 修复了节点默认输出与适配器不一致，`f9e358cf` 修复了支持尾帧的模型未填入尾帧，`1bafbbd6` 修复了 Ark 不接受浮点形式的整数时长。
-- **检查：** 从相关 UI 或 Agent 入口追踪代表性输入，核对后端校验与提供商请求；检查不支持的输入不会创建任务。区分协议替身与真实服务证据。
+- **Trigger:** Creating a generation node, configuring model capabilities, or constructing a provider request.
+- **Lesson:** Defaults, reference slots, and request parameters can fail at different layers. Commit `f623fedd` corrected node defaults that did not match the adapter; `f9e358cf` filled the last-frame slot for models that support it; `1bafbbd6` corrected an integer duration sent to Ark as a float.
+- **Check:** Trace representative input from the relevant UI or Agent entry point through backend validation to the provider request. Check that unsupported input does not create a job. Distinguish protocol mocks from real service evidence.
 
-## 跨边界操作可能丢失身份或上下文
+## Operations across boundaries can lose identity or context
 
-- **触发条件：** 工程导入、会话跨轮引用素材或运行期间切换工程。
-- **经验：** 提交 `e8c29c9b` 修复了画布归档往返中的来源信息与创建顺序等问题；`44857448` 修复了跨轮素材上下文；`00d8899c` 修复了切换工程导致 Agent 运行停止。它们是不同缺陷，均说明单看当前画面不足以确认状态和上下文。
-- **检查：** 按修改范围核对转换或恢复后的持久化对象身份、引用及执行输入；需要时重开工程或重新连接运行，并确认实际结果。
+- **Trigger:** Importing a project, referencing assets across conversation turns, or switching projects during a run.
+- **Lesson:** Commit `e8c29c9b` fixed provenance and creation-order problems in a canvas archive round trip; `44857448` fixed asset context across turns; `00d8899c` fixed Agent runs stopping when switching projects. These are different defects, but each shows that the current display alone cannot establish state and context.
+- **Check:** As relevant to the change, inspect persisted object identities, references, and execution inputs after conversion or recovery. Reopen the project or reconnect to the run when needed, and verify the actual result.
 
-## 基线失败需要继续追踪
+## Baseline failures still need tracking
 
-- **触发条件：** 相关测试失败，但比较后发现基线也失败。
-- **经验：** 提交 `28d61dce` 和 `0a5630ac` 分别记录了同一生成测试在基线失败。历史记录不能证明该测试在当前版本仍然失败。
-- **检查：** 记录比较所用版本和结果，关联已有问题或在适当时建立问题；明确报告该检查未通过，不将基线失败视为通过。
+- **Trigger:** A relevant test fails and comparison shows that it also fails on the baseline.
+- **Lesson:** Commits `28d61dce` and `0a5630ac` each recorded the same generation test failing on the baseline. That historical record does not establish whether the test still fails today.
+- **Check:** Record the versions and results used in the comparison. Link an existing issue or create one when appropriate. Report the check as failed; a baseline failure is not a pass.
