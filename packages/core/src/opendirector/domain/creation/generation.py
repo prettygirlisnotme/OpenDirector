@@ -8,6 +8,12 @@ from pydantic import Field, JsonValue, model_validator
 
 from opendirector.domain.minimax_models import MINIMAX_MODELS
 from opendirector.domain.generation import GenerationFailure, ResultCheck
+from opendirector.domain.rule_facts import (
+    FASTH3_MEDIA_REFERENCE_LIMIT, FRAME_IMAGE_LIMIT, LYRICS_MAX_LENGTH, MAX_REFERENCES,
+    MUSIC_SECONDS_INITIAL, MUSIC_SECONDS_MAX, MUSIC_SECONDS_MIN, PROMPT_MAX_LENGTH,
+    REFERENCE_MEDIA_SECONDS, STORED_VOICE_PATTERN, TEXT_DEFAULT_MAX_TOKENS, TEXT_MAX_TOKENS,
+    effective_video_mode, generate_audio_options,
+)
 from .assets import AssetRef, MediaMetadata
 from .base import CanvasItemVersion, Contract, Digest, GenerationKind, NonNegative, ObjectVersion, PositiveInt, ProjectEntity, Revision, digest, unique
 from .models import ModelConfigPublic, ModelSnapshot, VideoMode
@@ -15,7 +21,7 @@ from .models import ModelConfigPublic, ModelSnapshot, VideoMode
 
 class TextParameters(Contract):
     thinking: Literal['auto', 'low', 'medium', 'high'] = Field(default='auto', description='Requested reasoning effort.')
-    maxTokens: Annotated[int, Field(strict=True, ge=1, le=32768)] = Field(default=8192, description='Maximum generated text tokens.')
+    maxTokens: Annotated[int, Field(strict=True, ge=1, le=TEXT_MAX_TOKENS)] = Field(default=TEXT_DEFAULT_MAX_TOKENS, description='Maximum generated text tokens.')
 
 
 class ImageParameters(Contract):
@@ -35,8 +41,8 @@ class VideoParameters(Contract):
 
 
 # Music models count audio frames at 25 per second, between 200 and 9000 frames.
-MUSIC_SECONDS = (8, 360)
-DEFAULT_MUSIC_SECONDS = 30
+MUSIC_SECONDS = (MUSIC_SECONDS_MIN, MUSIC_SECONDS_MAX)
+DEFAULT_MUSIC_SECONDS = MUSIC_SECONDS_INITIAL
 # A cover can run a little longer than its reference (tempo, held endings);
 # the cap leaves this much room so the model ends the piece itself.
 REFERENCE_LENGTH_HEADROOM = 1.1
@@ -50,14 +56,14 @@ def reference_music_seconds(reference_seconds):
 class AudioParameters(Contract):
     creationType: Literal['audio', 'music'] = Field(default='audio', description='Speech or music creation mode.')
     mode: Literal['tts', 'unified'] = Field(default='tts', description='Operation mode within this contract variant.')
-    voice: str | None = Field(default=None, pattern=r'^[\w.-]{1,64}$', description='Provider voice identifier or name.')
+    voice: str | None = Field(default=None, pattern=STORED_VOICE_PATTERN, description='Provider voice identifier or name.')
     # Legacy: a release stored an explicit instrumental choice. It stays readable
     # so those specs and job fingerprints still load; generation ignores it.
     instrumental: bool = Field(default=False, exclude_if=lambda value: value is False, description='Legacy explicit instrumental choice retained for stored records.')
     # Music only: the prompt is the style description; empty lyrics ask for an instrumental piece.
     # Unset music fields stay out of the dump, so specs and job fingerprints
     # recorded before music support keep their identity.
-    lyrics: str = Field(default='', max_length=5000, exclude_if=lambda value: value == '', description='Song lyrics; empty lyrics request instrumental music.')
+    lyrics: str = Field(default='', max_length=LYRICS_MAX_LENGTH, exclude_if=lambda value: value == '', description='Song lyrics; empty lyrics request instrumental music.')
     durationSeconds: Annotated[float, Field(strict=True, ge=MUSIC_SECONDS[0], le=MUSIC_SECONDS[1])] | None = Field(
         default=None, exclude_if=lambda value: value is None, description='Maximum music duration in seconds.')
     # Music with a reference recording: follow its melody only, or its melody and chords.
@@ -72,7 +78,7 @@ class AudioParameters(Contract):
 
 class PromptText(Contract):
     type: Literal['text'] = Field(description='Operation or variant discriminator.')
-    text: str = Field(max_length=20000, description='UTF-8 text content or search query.')
+    text: str = Field(max_length=PROMPT_MAX_LENGTH, description='UTF-8 text content or search query.')
 
 
 class PromptReference(Contract):
@@ -86,7 +92,7 @@ PromptPart = Annotated[PromptText | PromptReference, Field(discriminator='type')
 class GenerationSpecBase(ProjectEntity):
     purpose: Literal['draft', 'generation'] = Field(default='draft', description='Draft settings or executable generation configuration.')
     modelConfigId: UUID | None = Field(default=None, description='Model configuration ID from the model catalog or user model selections.')  # Drafts can exist before choosing a model.
-    prompt: str = Field(default='', max_length=20000, description='Generation prompt text.')
+    prompt: str = Field(default='', max_length=PROMPT_MAX_LENGTH, description='Generation prompt text.')
     promptContent: tuple[PromptPart, ...] | None = Field(default=None, description='Structured prompt text and reference tokens.')
     currentResultId: UUID | None = Field(default=None, description='Currently adopted result ID.')
 
@@ -309,11 +315,17 @@ def execution_spec(spec, references, rules):
     Use the same resolution when freezing a job and comparing current inputs
     for automatic adoption. Reference layout without media is text-to-video.
     """
-    if (spec.kind == 'video' and spec.parameters.videoMode == 'reference'
-            and 'first_frame' in rules.videoModes
-            and not any(ref.transmission != 'context_only' and ref.asset.kind != 'text' for ref in references)):
-        return spec.model_copy(update={'parameters': spec.parameters.model_copy(update={'videoMode': 'first_frame'})})
-    return spec
+    if spec.kind != 'video':
+        return spec
+    mode = effective_video_mode({
+        'mode': spec.parameters.videoMode,
+        'allowedModes': rules.videoModes,
+        'hasNonTextMedia': any(ref.transmission != 'context_only' and ref.asset.kind != 'text' for ref in references),
+        'configured': True,
+    })
+    if mode == spec.parameters.videoMode:
+        return spec
+    return spec.model_copy(update={'parameters': spec.parameters.model_copy(update={'videoMode': mode})})
 
 
 def validate_generation(spec: GenerationSpec, model: ModelConfigPublic, references: tuple[ResolvedReference, ...] = ()):
@@ -329,7 +341,7 @@ def validate_generation(spec: GenerationSpec, model: ModelConfigPublic, referenc
     if (spec.promptContent is not None and not any(isinstance(part, PromptReference) or part.text.strip() for part in spec.promptContent)) or (spec.promptContent is None and not spec.prompt.strip()):
         raise ValueError('请填写生成提示词。')
     rules = model.inputRules
-    if len(references) > 64:
+    if len(references) > MAX_REFERENCES:
         raise ValueError('参考素材数量超过上限。')
     unique([(ref.referenceId, ref.asset.assetId) for ref in references], 'resolved reference assets')
     if spec.promptContent and any(isinstance(part, PromptReference) and part.referenceId not in {ref.referenceId for ref in references} for part in spec.promptContent):
@@ -385,13 +397,14 @@ def validate_generation(spec: GenerationSpec, model: ModelConfigPublic, referenc
             raise ValueError('当前官方协议不支持所选型号。')
         if params.aspectRatio is not None and params.aspectRatio not in rules.aspectRatios:
             raise ValueError('MiniMax-H3 不支持所选画幅比例。')
-    audio_options = rules.generateAudioOptions
-    if audio_options is None:
-        audio_options = (True, False) if model.protocol == 'volcengine' else (True,)
+    audio_options = generate_audio_options({
+        'published': None if rules.generateAudioOptions is None else list(rules.generateAudioOptions),
+        'protocol': model.protocol,
+    })
     if params.generateAudio not in audio_options:
         raise ValueError('当前视频适配器不支持关闭生成音频。')
-    if params.videoMode == 'first_frame' and len({ref.referenceId for ref in references if ref.asset.kind == 'image' and ref.subjectRole is None}) > 2:
-        raise ValueError('首尾帧模式最多连接 2 个图片节点，请先断开多余连线。')
+    if params.videoMode == 'first_frame' and len({ref.referenceId for ref in references if ref.asset.kind == 'image' and ref.subjectRole is None}) > FRAME_IMAGE_LIMIT:
+        raise ValueError(f'首尾帧模式最多连接 {FRAME_IMAGE_LIMIT} 个图片节点，请先断开多余连线。')
     if params.videoMode not in rules.videoModes:
         raise ValueError(f"当前模型不支持视频模式 {params.videoMode}；允许值：{', '.join(rules.videoModes)}。")
     if params.videoMode == 'continuation':
@@ -402,7 +415,7 @@ def validate_generation(spec: GenerationSpec, model: ModelConfigPublic, referenc
             raise ValueError('视频续写会沿用原视频尺寸，不能修改分辨率。')
     elif any(ref.role == 'continuation' for ref in references):
         raise ValueError('续写参考必须使用续写模式。')
-    if params.videoMode == 'first_frame' and (kinds.count('image') > (2 if rules.frameRoles and 'last_frame' in rules.frameRoles else 1) or any(kind in {'audio', 'video'} for kind in kinds)):
+    if params.videoMode == 'first_frame' and (kinds.count('image') > (FRAME_IMAGE_LIMIT if rules.frameRoles and 'last_frame' in rules.frameRoles else 1) or any(kind in {'audio', 'video'} for kind in kinds)):
         raise ValueError('首帧模式最多只能连接一个图片参考和文本。')
     for role in ('first_frame', 'last_frame'):
         frames = [ref for ref in transmitted if ref.role == role]
@@ -417,11 +430,11 @@ def validate_generation(spec: GenerationSpec, model: ModelConfigPublic, referenc
     for kind in ('audio', 'video'):
         seconds = [ref.metadata.durationSeconds for ref in transmitted if ref.asset.kind == kind]
         minimum = 2 if kind == 'audio' or rules.profile == 'minimax-h3-official' else 0
-        if any(value is None or value < minimum or value <= 0 for value in seconds) or sum(seconds) > 15:
+        if any(value is None or value < minimum or value <= 0 for value in seconds) or sum(seconds) > REFERENCE_MEDIA_SECONDS:
             label = '视频' if kind == 'video' else '音频'
-            raise ValueError(f'{label}参考的时长必须已知，且总时长不能超过 15 秒。')
-    if rules.profile == 'fasth3-omni' and sum(kind in {'image', 'video', 'audio'} for kind in kinds) > 12:
-        raise ValueError('FastH3 最多支持 12 个媒体参考。')
+            raise ValueError(f'{label}参考的时长必须已知，且总时长不能超过 {REFERENCE_MEDIA_SECONDS} 秒。')
+    if rules.profile == 'fasth3-omni' and sum(kind in {'image', 'video', 'audio'} for kind in kinds) > FASTH3_MEDIA_REFERENCE_LIMIT:
+        raise ValueError(f'FastH3 最多支持 {FASTH3_MEDIA_REFERENCE_LIMIT} 个媒体参考。')
     if params.resolution != 'auto':
         choices = rules.referenceImageResolutions if params.videoMode == 'reference' and 'image' in kinds and rules.referenceImageResolutions is not None else rules.outputResolutions
         if params.resolution not in choices:

@@ -1,4 +1,5 @@
 import type { ModelConfig } from "../backend/rules.ts";
+import { RULE_FACTS } from "../contracts/ruleFacts.generated.ts";
 import type { CanvasDocument, CanvasNode, AgentNodeSettings } from "./model.ts";
 import { referenceMaterial } from "./connectionPolicy.ts";
 import type { ResultSource } from "./linkedResults.ts";
@@ -7,7 +8,11 @@ import { lockedNodeIds } from "./hierarchy.ts";
 import { tNow } from "../i18n/messages.ts";
 
 export function agentNodeSettings(node: CanvasNode): AgentNodeSettings {
-  return { thinking: "auto", maxTokens: 8192, ...node.data.agentSettings };
+  return {
+    thinking: "auto",
+    maxTokens: RULE_FACTS.textDefaultMaxTokens,
+    ...node.data.agentSettings,
+  };
 }
 export function agentGenerationBlocker(
   node: CanvasNode,
@@ -21,7 +26,7 @@ export function agentGenerationBlocker(
   if (
     !Number.isInteger(settings.maxTokens) ||
     settings.maxTokens < 1 ||
-    settings.maxTokens > 32768
+    settings.maxTokens > RULE_FACTS.textMaxTokens
   )
     return tNow("errors.text.maxTokens");
   for (const reference of incoming) {

@@ -1,3 +1,4 @@
+import { RULE_FACTS } from "../contracts/ruleFacts.generated.ts";
 import type { CanvasNode } from "./model.ts";
 import { assistantReferences } from "./assistantReferences.ts";
 import type { ReferenceInput } from "../backend/generation.ts";
@@ -97,10 +98,12 @@ export function pendingReferenceInsertion(
   value: string,
   end: number,
   items: readonly PendingCanvasReference[],
-  maxLength = 20000,
+  maxLength: number = RULE_FACTS.promptMaxLength,
 ) {
-  if (items.length > 64)
-    throw new Error(tNow("errors.pendingRef.limit", { count: 64 }));
+  if (items.length > RULE_FACTS.maxReferences)
+    throw new Error(
+      tNow("errors.pendingRef.limit", { count: RULE_FACTS.maxReferences }),
+    );
   const invalid = items.filter((item) => item.error);
   if (invalid.length)
     throw new Error(

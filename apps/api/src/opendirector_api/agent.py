@@ -17,6 +17,7 @@ from opendirector.agent.context import RunContext, RuntimeId
 from opendirector.agent.runtime import AgentRuntimes, runtime_available, configured_runtimes, runtime_spec, runtime_catalog, runtime_status
 from opendirector.agent.skills import skills
 from opendirector.domain.projects import ProjectError
+from opendirector.domain.rule_facts import MAX_REFERENCES, PROMPT_MAX_LENGTH
 from opendirector.infrastructure.creation_projects import durable_json
 from opendirector.infrastructure.local_projects import child, read_json
 from opendirector_api.localization import localized_error_for_language
@@ -30,9 +31,9 @@ Runtime = RuntimeId
 class Draft(BaseModel):
     conversationId: UUID | None = None
     model_config = ConfigDict(extra='forbid')
-    draft: str = Field(default='', max_length=20000)
+    draft: str = Field(default='', max_length=PROMPT_MAX_LENGTH)
     draftContent: list[dict[str, JsonValue]] | None = None
-    assets: list[dict[str, JsonValue]] = Field(default_factory=list, max_length=64)
+    assets: list[dict[str, JsonValue]] = Field(default_factory=list, max_length=MAX_REFERENCES)
     runtime: Runtime = 'default'
     runtimeModel: str | None = Field(default=None, max_length=200)
     harnessModels: dict[Literal["opencode", "codex", "claude", "jiuwenswarm", "deepseek"], Annotated[str, Field(max_length=200)] | None] = Field(default_factory=dict)
@@ -47,9 +48,9 @@ class Turn(BaseModel):
     model_config = ConfigDict(extra='forbid')
     id: UUID
     modelId: UUID | None = None
-    text: str = Field(min_length=1, max_length=20000)
+    text: str = Field(min_length=1, max_length=PROMPT_MAX_LENGTH)
     content: list[dict[str, JsonValue]] | None = None
-    assets: list[UUID] = Field(default_factory=list, max_length=64)
+    assets: list[UUID] = Field(default_factory=list, max_length=MAX_REFERENCES)
     runtime: Runtime = 'default'
     runtimeModel: str | None = Field(default=None, max_length=200)
     thinking: Literal['auto', 'low', 'medium', 'high'] = 'auto'

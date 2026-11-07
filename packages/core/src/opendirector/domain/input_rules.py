@@ -1,9 +1,8 @@
 """Explicit adapter profiles, not model-name guesses or online capability probes."""
 from urllib.parse import urlsplit
 from typing import Literal
+from opendirector.domain.rule_facts import AGENT_IMAGE_BYTES, DEFAULT_VIDEO_BYTES, MAX_REFERENCES
 from opendirector.domain.video_capabilities import capability_fields, seedance_20_variant
-
-MAX_REFERENCES = 64  # Storage/structure guard; provider budgets are checked separately.
 VideoMode = Literal['first_frame', 'reference', 'continuation']
 
 
@@ -14,7 +13,7 @@ def _adapter_rules(config):
     rules = {'profile': 'compatible', 'allowedKinds': ['text', 'image'], 'maxImages': 8,
              'maxAudios': 0, 'imageBytes': 8 * 1024 * 1024, 'requestBytes': 48 * 1024 * 1024,
              'videoModes': ['first_frame'] if kind == 'video' else []}
-    rules.update(maxVideos=0, videoBytes=50 * 1024 * 1024)
+    rules.update(maxVideos=0, videoBytes=DEFAULT_VIDEO_BYTES)
     if kind == 'vision' or config.get('protocol') == 'vllm_omni_segmentation':
         # Shared image segmentation / video tracking service, never a generator.
         rules.update(profile='vllm-omni-segmentation', allowedKinds=[], maxImages=0, videoModes=[])
@@ -58,7 +57,7 @@ def _adapter_rules(config):
         rules.update(profile='standard-video', maxImages=1, videoModes=['first_frame'])
         return rules
     if kind == 'agent':
-        rules.update(allowedKinds=['text', 'image', 'video', 'audio'], maxImages=MAX_REFERENCES, imageBytes=32 * 1024 * 1024)
+        rules.update(allowedKinds=['text', 'image', 'video', 'audio'], maxImages=MAX_REFERENCES, imageBytes=AGENT_IMAGE_BYTES)
         if host == 'api.deepseek.com' and path in {'', '/v1'} and model == 'deepseek-flash':
             rules['profile'] = 'deepseek-flash'
     elif host == 'ark.cn-beijing.volces.com' and path == '/api/plan/v3':

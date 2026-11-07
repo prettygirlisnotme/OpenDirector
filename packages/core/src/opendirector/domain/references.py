@@ -2,6 +2,7 @@
 
 from typing import Annotated, Literal
 from opendirector.domain.input_rules import MAX_REFERENCES
+from opendirector.domain.rule_facts import PROMPT_MAX_LENGTH
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
@@ -10,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 class TextPart(BaseModel):
     model_config = ConfigDict(extra='forbid')
     type: Literal['text']
-    text: str = Field(max_length=20000)
+    text: str = Field(max_length=PROMPT_MAX_LENGTH)
 
 
 class ReferencePart(BaseModel):

@@ -1,3 +1,4 @@
+import { RULE_FACTS } from "../contracts/ruleFacts.generated.ts";
 import type { CanvasNode, GenerationSettings } from "./model.ts";
 import { subjectReferenceNodes } from "./subjectReferences.ts";
 import { frameImageLimitIssue } from "./frameReferences.ts";
@@ -105,19 +106,7 @@ export const GENERATION_MODELS: readonly GenerationModel[] = [
   },
 ];
 
-export const GENERATION_RATIOS = [
-  "21:9",
-  "16:9",
-  "3:2",
-  "4:3",
-  "1:1",
-  "3:4",
-  "2:3",
-  "9:16",
-  "5:4",
-  "4:5",
-  "2:1",
-] as const;
+export const GENERATION_RATIOS = RULE_FACTS.videoAspectRatios;
 
 export function generationModel(settings: GenerationSettings) {
   return GENERATION_MODELS.find(

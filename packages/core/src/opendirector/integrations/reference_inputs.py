@@ -4,12 +4,15 @@ import hashlib
 import json
 
 from opendirector.domain.input_rules import MAX_REFERENCES, input_rules
+from opendirector.domain.rule_facts import (
+    FASTH3_MEDIA_REFERENCE_LIMIT, REFERENCE_MEDIA_SECONDS, TEXT_REFERENCE_BYTES,
+)
 from opendirector.domain.projects import ProjectError
 from opendirector.domain.references import project_content
 
 
 def reference_text(data):
-    if len(data) > 64 * 1024:
+    if len(data) > TEXT_REFERENCE_BYTES:
         raise ProjectError('文本参考文件应不超过 64 KB，请缩短文件后重新添加。')
     try:
         return data.decode('utf-8-sig')
@@ -48,6 +51,7 @@ def request_size(payload, maximum):
 
 
 def reference_content(store, owner, message, *, manifest=None, overrides=None):
+    agent_rules = input_rules({'kind': 'agent', 'url': '', 'modelId': ''})
     structured = message.get('content') is not None
     text = project_content(message['content'])[0] if structured else message['text']
     blocks = [{'type': 'text', 'text': text}] if text else []
@@ -68,11 +72,11 @@ def reference_content(store, owner, message, *, manifest=None, overrides=None):
             mime = image_type(data)
             if kind != 'image' or mime is None:
                 raise ProjectError('当前对话支持图片及文本内容，视频和音频仅传素材信息；此文件格式不支持引用。')
-            if len(data) > 32 * 1024 * 1024:
+            if len(data) > agent_rules['imageBytes']:
                 raise ProjectError('单张对话参考图片应不超过 32 MB。', 413)
             blocks.append({'type': 'image_url', 'image_url': {'url': data_uri(data, mime)}})
     content = blocks if message['assets'] else text
-    request_size(content, input_rules({'kind': 'agent', 'url': '', 'modelId': ''})['requestBytes'])
+    request_size(content, agent_rules['requestBytes'])
     return content
 
 
@@ -149,8 +153,8 @@ def generation_references(store, task, config, *, complete=True, overrides=None)
             duration = meta.get('durationMs')
             if meta['type'] not in {'video/mp4', 'video/quicktime'} or len(data) > rules['videoBytes']:
                 raise ProjectError(f'参考视频需为不超过 {rules["videoBytes"] // (1024 * 1024)} MB 的 MP4 或 MOV。')
-            if duration is None or not 0 < duration <= 15000:
-                raise ProjectError('参考视频需为不超过 15 秒的有效视频。')
+            if duration is None or not 0 < duration <= REFERENCE_MEDIA_SECONDS * 1000:
+                raise ProjectError(f'参考视频需为不超过 {REFERENCE_MEDIA_SECONDS} 秒的有效视频。')
             total_video_ms += duration
             result['videos'].append(data_uri(data, meta['type']))
             number = len(result['videos'])
@@ -160,8 +164,8 @@ def generation_references(store, task, config, *, complete=True, overrides=None)
             if meta['type'] not in {'audio/wav', 'audio/x-wav', 'audio/mpeg'} or len(data) > 15 * 1024 * 1024:
                 raise ProjectError('参考音频需为不超过 15 MB 的 WAV 或 MP3。')
             duration = meta.get('durationMs')
-            if duration is None or not 2000 <= duration <= 15000:
-                raise ProjectError('参考音频需为 2—15 秒，请先检查文件时长。')
+            if duration is None or not 2000 <= duration <= REFERENCE_MEDIA_SECONDS * 1000:
+                raise ProjectError(f'参考音频需为 2—{REFERENCE_MEDIA_SECONDS} 秒，请先检查文件时长。')
             total_audio_ms += duration
             result['audios'].append(data_uri(data, 'audio/wav' if meta['type'] == 'audio/x-wav' else meta['type']))
             number = len(result['audios'])
@@ -175,14 +179,14 @@ def generation_references(store, task, config, *, complete=True, overrides=None)
         raise ProjectError('当前模型只按文字生成，不支持参考图片；请移除图片参考，或把外观要求写进提示词。当前输入已保留。')
     if len(result['images']) > maximum:
         raise ProjectError(f'当前生成模式最多使用 {maximum} 张参考图片；多图视频请使用素材参考模式。')
-    if len(result['audios']) > rules['maxAudios'] or total_audio_ms > 15000:
-        raise ProjectError('参考音频最多 3 段，总时长不超过 15 秒。')
+    if len(result['audios']) > rules['maxAudios'] or total_audio_ms > REFERENCE_MEDIA_SECONDS * 1000:
+        raise ProjectError(f'参考音频最多 3 段，总时长不超过 {REFERENCE_MEDIA_SECONDS} 秒。')
     if complete and mode == 'continuation' and not result['continueFrom']:
         raise ProjectError('接续生成需要引用上一段由 vLLM-Omni H3 生成的视频。')
-    if len(result['videos']) > rules.get('maxVideos', 0) or total_video_ms > 15000:
-        raise ProjectError('视频参考最多 3 段，总时长不超过 15 秒。')
-    if rules['profile'] == 'fasth3-omni' and len(result['images']) + len(result['videos']) + len(result['audios']) > 12:
-        raise ProjectError('FastH3-Omni 的图片、视频和音频参考合计最多 12 项。')
+    if len(result['videos']) > rules.get('maxVideos', 0) or total_video_ms > REFERENCE_MEDIA_SECONDS * 1000:
+        raise ProjectError(f'视频参考最多 3 段，总时长不超过 {REFERENCE_MEDIA_SECONDS} 秒。')
+    if rules['profile'] == 'fasth3-omni' and len(result['images']) + len(result['videos']) + len(result['audios']) > FASTH3_MEDIA_REFERENCE_LIMIT:
+        raise ProjectError(f'FastH3-Omni 的图片、视频和音频参考合计最多 {FASTH3_MEDIA_REFERENCE_LIMIT} 项。')
     if media_bytes > 100 * 1024 * 1024:
         raise ProjectError('参考素材合计超过 100 MB，请缩小文件。', 413)
     if complete and result['audios'] and not (result['images'] or result['videos']) and mode != 'continuation':

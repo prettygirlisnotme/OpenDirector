@@ -8,6 +8,7 @@ from .assets import AssetRef, MediaMetadata
 from .base import Contract, Digest, GenerationKind, MediaKind, ObjectVersion, Point, Positive, Revision, digest, unique
 from .canvas import CanvasItem
 from .editors import EditorDocument
+from opendirector.domain.rule_facts import PROMPT_MAX_LENGTH
 from .generation import GenerationSpec, Job, PromptPart, Reference
 
 
@@ -185,7 +186,7 @@ class NodeVersionApply(Contract):
 
 class SpecPromptWrite(Contract):
     specId: UUID = Field(description='Generation configuration ID.')
-    prompt: str = Field(max_length=20000, description='Generation prompt text.')
+    prompt: str = Field(max_length=PROMPT_MAX_LENGTH, description='Generation prompt text.')
     promptContent: tuple[PromptPart, ...] | None = Field(default=None, description='Structured prompt text and reference tokens.')
 
 

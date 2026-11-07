@@ -37,9 +37,11 @@
 
 - 运行时安装探测与状态词汇：`packages/core/src/opendirector/agent/runtime.py`。
 - 环境能力门禁：`tests/capabilities.py` 与 `tests/conftest.py`（仓库此前没有 conftest）。
+- 创作规则的共享限额与菜单推导：`packages/core/src/opendirector/domain/rule_facts.py`。浏览器只读生成结果 `src/contracts/ruleFacts.generated.ts`。断言这些菜单或限额时导入该模块或对照生成向量，不要再抄一份比例表或字节上限。
 
 ## 待迁移
 
+- `backendBlocker` 与 `validate_generation`、`backendReferences` 与 `reference_policy` 的过程分支仍各写一处。限额已经共用；在把其余谓词收进同一模块或校验接口之前，不要在第三处再写一份。
 - `tests/` 中仍有数十处内联 `shutil.which` 门禁，应逐步替换为 `capabilities` 中的声明。
 - 浏览器脚本仍以文案定位元素；下一步是固定测试用的 `locale` 或给关键控件补稳定标识。
 - 真实 CLI 用例（native / jiuwenswarm / deepseek / runtime_catalog）在 Windows 上失败属平台差异，应按 `requires_posix()` 声明，而不是逐条改断言。

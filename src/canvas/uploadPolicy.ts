@@ -1,3 +1,4 @@
+import { referenceByteLimit } from "../contracts/ruleFacts.generated.ts";
 import type { CanvasNode, CanvasResource } from "./model.ts";
 import { tNow } from "../i18n/messages.ts";
 import type { MessageKey } from "../i18n/types.ts";
@@ -55,14 +56,9 @@ export function assertUpload(
 export function assertReferenceSize(
   kind: string,
   size: number,
-  imageBytes = 32 * 1024 * 1024,
+  imageBytes: number | null = null,
 ) {
-  const maximum =
-    kind === "text"
-      ? 64 * 1024
-      : kind === "image"
-        ? imageBytes
-        : 50 * 1024 * 1024;
+  const maximum = referenceByteLimit({ kind, imageBytes });
   if (size > maximum)
     throw new Error(
       tNow("errors.upload.size", { kib: Math.round(maximum / 1024) }),

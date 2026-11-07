@@ -1,5 +1,13 @@
 import { nodeByteSize } from "../canvas/uploadPolicy.ts";
 import type { CanvasNode, GenerationSettings } from "../canvas/model.ts";
+import {
+  RULE_FACTS,
+  aspectRatioChoices,
+  effectiveVideoMode,
+  generateAudioOptions,
+  referenceByteLimit,
+  resolutionChoices,
+} from "../contracts/ruleFacts.generated.ts";
 import { subjectReferenceNodes } from "../canvas/subjectReferences.ts";
 export { subjectReferenceNodes } from "../canvas/subjectReferences.ts";
 import { frameImageLimitIssue } from "../canvas/frameReferences.ts";
@@ -96,7 +104,17 @@ export function isMusicModel(model: Pick<ModelConfig, "kind" | "protocol">) {
 }
 
 /** Music models count audio frames at 25 per second, between 200 and 9000 frames. */
-export const MUSIC_SECONDS = { min: 8, max: 360, initial: 30 } as const;
+export const MUSIC_SECONDS = {
+  min: RULE_FACTS.musicSecondsMin,
+  max: RULE_FACTS.musicSecondsMax,
+  initial: RULE_FACTS.musicSecondsInitial,
+} as const;
+
+const serviceVoicePattern = new RegExp(RULE_FACTS.serviceVoicePattern);
+
+function isServiceVoice(value: string | undefined) {
+  return serviceVoicePattern.test(value ?? "");
+}
 
 /** The audio node's role follows its model: a music model composes, any other reads aloud. */
 export function serviceAudioSettings(
@@ -149,9 +167,7 @@ const LABELS: Record<string, MessageKey> = {
 
 /** Speaker names a speech service accepts; others fall back to its default voice. */
 export function serviceVoice(settings: Pick<GenerationSettings, "voiceName">) {
-  return /^[A-Za-z0-9_.-]{1,64}$/.test(settings.voiceName ?? "")
-    ? settings.voiceName
-    : undefined;
+  return isServiceVoice(settings.voiceName) ? settings.voiceName : undefined;
 }
 
 export function modelLabel(config: Pick<ModelConfig, "modelId">) {
@@ -267,19 +283,58 @@ export function backendReferences(
   }));
 }
 
+/** Canvas slot assignment for a saved reference. The backend stores this role. */
+export function canvasReferenceRole(
+  settings: Pick<
+    GenerationSettings,
+    "videoMode" | "firstFrameNodeId" | "lastFrameNodeId"
+  > | undefined,
+  sourceKind: string | undefined,
+  ref: {
+    binding: string;
+    role?: string | null;
+    source: { id?: string } | { assetId: string };
+  },
+): "reference" | "first_frame" | "last_frame" | "continuation" {
+  const sourceId = "id" in ref.source ? ref.source.id : undefined;
+  if (settings?.videoMode === "continuation" && sourceKind === "video") {
+    return "continuation";
+  }
+  if (
+    settings?.videoMode === "first-last" &&
+    ((ref.binding === "follow_current" &&
+      sourceId === settings.firstFrameNodeId) ||
+      (ref.binding === "pinned" &&
+        ref.role === "first_frame" &&
+        !settings.firstFrameNodeId))
+  ) {
+    return "first_frame";
+  }
+  if (
+    settings?.videoMode === "first-last" &&
+    ((ref.binding === "follow_current" &&
+      sourceId === settings.lastFrameNodeId) ||
+      (ref.binding === "pinned" &&
+        ref.role === "last_frame" &&
+        !settings.lastFrameNodeId))
+  ) {
+    return "last_frame";
+  }
+  return "reference";
+}
+
 export function backendVideoMode(
   settings: GenerationSettings,
   references: readonly BackendReference[],
   config?: ModelConfig,
 ): BackendVideoMode {
-  if (settings.videoMode === "continuation") return "continuation";
-  if (settings.videoMode === "first-last") return "first_frame";
-  if (config && !config.inputRules.videoModes.includes("first_frame"))
-    return "reference";
   // Without media inputs a reference request is plain text-to-video.
-  return references.some((item) => item.node.data.kind !== "text")
-    ? "reference"
-    : "first_frame";
+  return effectiveVideoMode({
+    mode: settings.videoMode,
+    allowedModes: config?.inputRules.videoModes ?? [],
+    hasNonTextMedia: references.some((item) => item.node.data.kind !== "text"),
+    configured: config != null,
+  });
 }
 
 /** The backend publishes adapter capabilities; unknown services retain automatic sizing. */
@@ -289,48 +344,24 @@ export function backendResolutions(
   config: ModelConfig | undefined,
   incoming: readonly CanvasNode[] = [],
 ): string[] {
-  if (settings.mode === "image")
-    return [
-      "auto",
-      ...new Set(
-        (config?.inputRules.imageOutputs ?? [])
-          .filter(
-            (item) =>
-              !settings.aspectRatio ||
-              settings.aspectRatio === "auto" ||
-              item.aspectRatio === settings.aspectRatio,
-          )
-          .map((item) => item.size),
-      ),
-    ];
-  if (settings.mode !== "video" || settings.videoMode === "continuation")
-    return ["auto"];
   const rules = config?.inputRules;
-  const choices =
-    settings.videoMode === "reference" &&
-    incoming.some(
+  return resolutionChoices({
+    kind: settings.mode,
+    videoMode: settings.videoMode,
+    aspectRatio: settings.aspectRatio,
+    imageOutputs: rules?.imageOutputs ?? [],
+    hasImageReference: incoming.some(
       (node) =>
         node.data.kind === "image" ||
         subjectReferenceNodes(node).some(
           (resource) => resource.type === "image",
         ),
-    )
-      ? (rules?.referenceImageResolutions ?? rules?.outputResolutions)
-      : rules?.outputResolutions;
-  const outputs = rules?.videoCapabilities?.outputs;
-  return [
-    "auto",
-    ...(choices ?? []).filter(
-      (label) =>
-        !outputs ||
-        settings.durationSeconds === undefined ||
-        outputs.some(
-          (item) =>
-            item.resolution === label &&
-            item.durations.includes(settings.durationSeconds!),
-        ),
     ),
-  ];
+    outputResolutions: rules?.outputResolutions ?? null,
+    referenceImageResolutions: rules?.referenceImageResolutions ?? null,
+    durationSeconds: settings.durationSeconds ?? null,
+    capabilityOutputs: rules?.videoCapabilities?.outputs ?? null,
+  });
 }
 
 export function backendDurations(config: ModelConfig | undefined): number[] {
@@ -347,42 +378,20 @@ export function backendAspectRatios(
   settings: Pick<GenerationSettings, "mode" | "videoMode">,
   config?: ModelConfig,
 ): string[] {
-  if (settings.mode === "image")
-    return [
-      "auto",
-      ...new Set(
-        (config?.inputRules.imageOutputs ?? []).flatMap((item) =>
-          item.aspectRatio === "auto" ? [] : [item.aspectRatio],
-        ),
-      ),
-    ];
-  if (settings.mode === "video" && config?.inputRules.aspectRatios)
-    return settings.videoMode === "first-last"
-      ? ["auto"]
-      : ["auto", ...config.inputRules.aspectRatios];
-  if (
-    settings.mode === "video" &&
-    settings.videoMode !== "continuation" &&
-    (config?.protocol === "volcengine" ||
+  return aspectRatioChoices({
+    kind: settings.mode,
+    videoMode: settings.videoMode,
+    publishedRatios: config?.inputRules.aspectRatios ?? null,
+    protocol: config?.protocol ?? null,
+    dimensioned: Boolean(
       config?.inputRules.videoCapabilities?.outputs.some(
         (item) => item.width && item.height,
-      ))
-  )
-    return [
-      "auto",
-      "21:9",
-      "16:9",
-      "3:2",
-      "4:3",
-      "1:1",
-      "3:4",
-      "2:3",
-      "9:16",
-      "5:4",
-      "4:5",
-      "2:1",
-    ];
-  return ["auto"];
+      ),
+    ),
+    imageOutputRatios: (config?.inputRules.imageOutputs ?? []).map(
+      (item) => item.aspectRatio,
+    ),
+  });
 }
 
 export function serviceGenerationSettings(
@@ -408,13 +417,12 @@ export function serviceGenerationSettings(
   next = serviceAudioSettings(next, config);
   if (modelChanged) {
     next.imagePreset = "none";
-    if (!/^[A-Za-z0-9_.-]{1,64}$/.test(next.voiceName ?? ""))
-      next.voiceName = undefined;
+    if (!isServiceVoice(next.voiceName)) next.voiceName = undefined;
     if (
-      !(
-        config.inputRules.generateAudioOptions?.includes(false) ??
-        config.protocol === "volcengine"
-      )
+      !generateAudioOptions({
+        published: config.inputRules.generateAudioOptions ?? null,
+        protocol: config.protocol,
+      }).includes(false)
     )
       next.audioEnabled = true;
   }
@@ -498,7 +506,7 @@ export function backendBlocker(
         min: MUSIC_SECONDS.min,
         max: MUSIC_SECONDS.max,
       });
-    if ((settings.lyrics ?? "").length > 5000)
+    if ((settings.lyrics ?? "").length > RULE_FACTS.lyricsMaxLength)
       return tNow("errors.rules.lyricsLimit");
     if (
       !config.inputRules.allowedKinds.includes("audio") &&
@@ -519,16 +527,16 @@ export function backendBlocker(
   if (
     settings.mode === "audio" &&
     settings.voiceName &&
-    !/^[A-Za-z0-9_.-]{1,64}$/.test(settings.voiceName)
+    !isServiceVoice(settings.voiceName)
   )
     return tNow("errors.rules.voiceId");
   if (
     settings.mode === "video" &&
     settings.audioEnabled === false &&
-    !(
-      rules.generateAudioOptions?.includes(false) ??
-      config.protocol === "volcengine"
-    )
+    !generateAudioOptions({
+      published: rules.generateAudioOptions ?? null,
+      protocol: config.protocol,
+    }).includes(false)
   )
     return tNow("errors.rules.audioDisable");
   const references = backendReferences(settings, incoming, config);
@@ -604,14 +612,11 @@ export function referenceBudgetIssue(
     if (seen.has(key)) continue;
     seen.add(key);
     const size = nodeByteSize(source);
-    const limit =
-      source.type === "text"
-        ? 64 * 1024
-        : source.type === "image"
-          ? (config.inputRules.imageBytes ?? 32 * 1024 * 1024)
-          : source.type === "video"
-            ? (config.inputRules.videoBytes ?? 50 * 1024 * 1024)
-            : 50 * 1024 * 1024;
+    const limit = referenceByteLimit({
+      kind: source.type,
+      imageBytes: config.inputRules.imageBytes,
+      videoBytes: config.inputRules.videoBytes,
+    });
     if (size > limit) return tNow("errors.rules.referenceFileSize");
     total += size;
   }

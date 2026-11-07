@@ -1,4 +1,5 @@
 import type { ChatAsset } from "../backend/chat.ts";
+import { RULE_FACTS } from "../contracts/ruleFacts.generated.ts";
 import type { Translate } from "../i18n/I18nProvider.tsx";
 import { defaultTranslate } from "./assistantTranslate.ts";
 
@@ -49,8 +50,8 @@ export function fingerprintMatches(asset: ReferenceAsset, value: string) {
     asset.fingerprint === value || !!asset.fingerprintAliases?.includes(value)
   );
 }
-export const REFERENCE_LIMIT = 64; // Structural guard, separate from each provider's media budget.
-export const CONTENT_LIMIT = 20000;
+export const REFERENCE_LIMIT = RULE_FACTS.maxReferences; // Structural guard, separate from each provider's media budget.
+export const CONTENT_LIMIT = RULE_FACTS.promptMaxLength;
 export function assetKind(asset: ReferenceAsset) {
   return (
     asset.kind ??

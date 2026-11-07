@@ -3,10 +3,8 @@ import math
 
 from opendirector.domain.input_rules import input_rules
 from opendirector.domain.projects import ProjectError
+from opendirector.domain.rule_facts import VIDEO_ASPECT_RATIOS as RATIOS
 from opendirector.domain.video_capabilities import validate_video_duration
-
-
-RATIOS = ('21:9', '16:9', '3:2', '4:3', '1:1', '3:4', '2:3', '9:16', '5:4', '4:5', '2:1')
 
 
 def _ratio(value):

@@ -8,6 +8,7 @@ import {
   type ReferenceContent,
 } from "./chatReferenceContent.ts";
 import { editContent, type Caret } from "./chatReferenceDOM.ts";
+import { referenceByteLimit } from "../contracts/ruleFacts.generated.ts";
 import type { Translate } from "../i18n/I18nProvider.tsx";
 import { defaultTranslate } from "./assistantTranslate.ts";
 
@@ -18,11 +19,7 @@ export interface ReferenceRules {
   imageBytes: number;
 }
 export function referenceSizeLimit(asset: ReferenceAsset, imageBytes: number) {
-  return assetKind(asset) === "text"
-    ? 64 * 1024
-    : assetKind(asset) === "image"
-      ? imageBytes
-      : 50 * 1024 * 1024;
+  return referenceByteLimit({ kind: assetKind(asset), imageBytes });
 }
 
 // Prepare the whole edit before publishing; never silently drop invalid items.

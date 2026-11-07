@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / 'packages/core/src'))
 
 from pydantic import BaseModel, TypeAdapter
 from opendirector.domain.creation.schema import ALIASES, CreationContracts
+from opendirector.domain.rule_facts import typescript_module
 
 MODULES = ('base', 'assets', 'models', 'generation', 'editors', 'canvas', 'project', 'commands', 'schema')
 
@@ -120,6 +121,7 @@ def artifacts():
     return {
         ROOT / 'src/contracts/creation.schema.json': json.dumps(document, ensure_ascii=False, indent=2) + '\n',
         ROOT / 'src/contracts/generated.ts': typescript(catalogs, definitions),
+        ROOT / 'src/contracts/ruleFacts.generated.ts': typescript_module(),
     }
 
 

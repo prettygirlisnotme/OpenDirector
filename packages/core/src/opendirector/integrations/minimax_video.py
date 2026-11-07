@@ -6,6 +6,7 @@ from urllib.parse import quote, urlsplit
 import httpx
 
 from opendirector.domain.input_rules import input_rules
+from opendirector.domain.rule_facts import FRAME_IMAGE_LIMIT, REFERENCE_MEDIA_SECONDS
 from opendirector.domain.minimax_models import MINIMAX_MODELS
 from opendirector.domain.projects import ProjectError
 from opendirector.integrations.generation_errors import protocol_failure, provider_failure, transport_failure
@@ -71,8 +72,8 @@ class MinimaxVideoGeneration:
                     raise ProjectError('MiniMax-H3 参考画面边长须为 256—5760 像素，宽高比须为 0.4—2.5。')
             if kind in durations:
                 duration = meta.get('durationMs')
-                if duration is None or not 2000 <= duration <= 15000:
-                    raise ProjectError('MiniMax-H3 视频和音频参考须为 2—15 秒。')
+                if duration is None or not 2000 <= duration <= REFERENCE_MEDIA_SECONDS * 1000:
+                    raise ProjectError(f'MiniMax-H3 视频和音频参考须为 2—{REFERENCE_MEDIA_SECONDS} 秒。')
                 durations[kind] += duration
             if mode == 'first_frame':
                 if kind != 'image':
@@ -86,7 +87,7 @@ class MinimaxVideoGeneration:
             wire_kind = f'{kind}_url'
             content.append({'type': wire_kind, wire_kind: {'url': data_uri(blob, 'audio/wav' if mime == 'audio/x-wav' else mime)}, 'role': role})
             manifest.append({'assetId': str(meta['id']), 'fingerprint': meta['fingerprint'], 'kind': kind, 'transmission': 'content', 'role': role})
-        if counts['image'] > (2 if mode == 'first_frame' else rules['maxImages']) or counts['video'] > rules['maxVideos'] or counts['audio'] > rules['maxAudios'] or any(value > 15000 for value in durations.values()):
+        if counts['image'] > (FRAME_IMAGE_LIMIT if mode == 'first_frame' else rules['maxImages']) or counts['video'] > rules['maxVideos'] or counts['audio'] > rules['maxAudios'] or any(value > REFERENCE_MEDIA_SECONDS * 1000 for value in durations.values()):
             raise ProjectError('MiniMax-H3 参考数量或总时长超过限制。')
         if complete and not prompt.strip():
             raise ProjectError('MiniMax-H3 需要非空提示词。')

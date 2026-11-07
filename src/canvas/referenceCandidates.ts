@@ -1,3 +1,4 @@
+import { referenceByteLimit } from "../contracts/ruleFacts.generated.ts";
 import type { CanvasNode } from "./model.ts";
 import { nodeMentionOptions, type MentionOption } from "./referenceMentions.ts";
 import type { ReferenceAsset } from "./chatReferenceContent.ts";
@@ -37,12 +38,7 @@ export function referenceCandidates(
       title: assetDisplayName(asset.nodeTitle || asset.name),
       detail: tNow("errors.refs.projectMaterial"),
       disabledReason:
-        asset.size >
-        (asset.kind === "text"
-          ? 64 * 1024
-          : asset.kind === "image"
-            ? 32 * 1024 * 1024
-            : 50 * 1024 * 1024)
+        asset.size > referenceByteLimit({ kind: asset.kind ?? "" })
           ? tNow("errors.refs.tooLarge")
           : null,
     });

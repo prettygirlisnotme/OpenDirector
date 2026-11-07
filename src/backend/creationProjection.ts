@@ -31,7 +31,8 @@ import {
 import { mediaBlobDataUrl } from "../canvas/localMediaRuntime.ts";
 import { generationContentPatch } from "../canvas/generationReferenceContent.ts";
 import { assemblyResource } from "../canvas/editorAssembly.ts";
-import { MUSIC_SECONDS } from "./rules.ts";
+import { RULE_FACTS } from "../contracts/ruleFacts.generated.ts";
+import { canvasReferenceRole, MUSIC_SECONDS } from "./rules.ts";
 import {
   assetReference,
   CreationClient,
@@ -817,7 +818,9 @@ export class CreationProjection {
           kind: "text",
           parameters: {
             thinking: node.data.agentSettings?.thinking ?? "auto",
-            maxTokens: node.data.agentSettings?.maxTokens ?? 8192,
+            maxTokens:
+              node.data.agentSettings?.maxTokens ??
+              RULE_FACTS.textDefaultMaxTokens,
           },
         };
       case "image":
@@ -1597,24 +1600,7 @@ export class CreationProjection {
           ref.binding === "follow_current"
             ? items.get(ref.source.id)?.kind
             : ref.source.kind;
-        const role =
-          settings?.videoMode === "continuation" && sourceKind === "video"
-            ? "continuation"
-            : settings?.videoMode === "first-last" &&
-                ((ref.binding === "follow_current" &&
-                  ref.source.id === settings.firstFrameNodeId) ||
-                  (ref.binding === "pinned" &&
-                    ref.role === "first_frame" &&
-                    !settings.firstFrameNodeId))
-              ? "first_frame"
-              : settings?.videoMode === "first-last" &&
-                  ((ref.binding === "follow_current" &&
-                    ref.source.id === settings.lastFrameNodeId) ||
-                    (ref.binding === "pinned" &&
-                      ref.role === "last_frame" &&
-                      !settings.lastFrameNodeId))
-                ? "last_frame"
-                : "reference";
+        const role = canvasReferenceRole(settings, sourceKind, ref);
         if (role !== ref.role) {
           expect("reference", ref);
           operations.push({
@@ -1635,24 +1621,7 @@ export class CreationProjection {
               ? (document.nodes.find((item) => item.id === ref.source.id)
                   ?.type ?? items.get(ref.source.id)?.kind)
               : ref.source.kind;
-          const role =
-            settings?.videoMode === "continuation" && sourceKind === "video"
-              ? "continuation"
-              : settings?.videoMode === "first-last" &&
-                  ((ref.binding === "follow_current" &&
-                    ref.source.id === settings.firstFrameNodeId) ||
-                    (ref.binding === "pinned" &&
-                      ref.role === "first_frame" &&
-                      !settings.firstFrameNodeId))
-                ? "first_frame"
-                : settings?.videoMode === "first-last" &&
-                    ((ref.binding === "follow_current" &&
-                      ref.source.id === settings.lastFrameNodeId) ||
-                      (ref.binding === "pinned" &&
-                        ref.role === "last_frame" &&
-                        !settings.lastFrameNodeId))
-                  ? "last_frame"
-                  : "reference";
+          const role = canvasReferenceRole(settings, sourceKind, ref);
           operations[index] = {
             type: op.type,
             payload: { reference: { ...ref, role } },

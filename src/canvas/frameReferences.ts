@@ -5,8 +5,9 @@ import type {
 } from "./model.ts";
 import { tNow } from "../i18n/messages.ts";
 import type { ModelConfig } from "../backend/rules.ts";
+import { RULE_FACTS } from "../contracts/ruleFacts.generated.ts";
 
-export const FRAME_IMAGE_LIMIT = 2;
+export const FRAME_IMAGE_LIMIT = RULE_FACTS.frameImageLimit;
 export const frameImageLimitMessage = () =>
   tNow("errors.connection.frameCapacity");
 

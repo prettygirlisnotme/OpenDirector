@@ -21,6 +21,7 @@ from opendirector.domain.creation.project import ProjectSnapshot, asset_referenc
 from opendirector.domain.creation.index import object_index
 from opendirector.domain.creation.validation import ContractError
 from opendirector.domain.input_rules import input_rules
+from opendirector.domain.rule_facts import FRAME_IMAGE_LIMIT
 from opendirector.domain.projects import ProjectError
 from opendirector.ports.gateway import gateway
 
@@ -199,8 +200,8 @@ def validate_frame_reference_limit(snapshot):
                 images.add(('asset', ref.source.assetId))
             elif ref.binding == 'follow_current' and items[ref.source.id].kind == 'image':
                 images.add(('node', ref.source.id))
-        if len(images) > 2:
-            raise ContractError('reference_invalid', '首尾帧模式最多连接 2 个图片节点，请先断开多余连线。', spec.id)
+        if len(images) > FRAME_IMAGE_LIMIT:
+            raise ContractError('reference_invalid', f'首尾帧模式最多连接 {FRAME_IMAGE_LIMIT} 个图片节点，请先断开多余连线。', spec.id)
 
 
 def reference_evidence(snapshot, spec, reference):

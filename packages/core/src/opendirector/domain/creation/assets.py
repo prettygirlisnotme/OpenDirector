@@ -4,6 +4,7 @@ from uuid import UUID
 
 from pydantic import Field, model_validator
 
+from opendirector.domain.rule_facts import PROMPT_MAX_LENGTH
 from .base import Contract, Fingerprint, MediaKind, NonNegative, Positive, PositiveInt, ProjectEntity, Revision
 from .models import ModelSnapshot
 
@@ -64,7 +65,7 @@ class AssetProvenance(Contract):
     agentRunId: UUID | None = Field(default=None, description='Agent turn ID.')
     agentRuntime: Literal['opencode', 'codex', 'claude', 'jiuwenswarm', 'deepseek'] | None = Field(default=None, description='Native Agent runtime that produced this asset.')
     modelSnapshot: ModelSnapshot | None = Field(default=None, description='Fixed model connection recorded for provenance.')
-    prompt: str | None = Field(default=None, max_length=20000, description='Generation prompt text.')
+    prompt: str | None = Field(default=None, max_length=PROMPT_MAX_LENGTH, description='Generation prompt text.')
     importedFrom: Literal['generated', 'edited'] | None = Field(default=None, description='Original source recorded by a canvas archive this asset was imported from.')
 
     @model_validator(mode='after')
